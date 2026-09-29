@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<meta name="theme-color" content="#0a4a40">
+<meta name="theme-color" content="#0d5c4f">
 <title>Leitor · Transferência Incense</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -18,9 +18,9 @@
 -->
 <style>
   :root {
-    --bg: #07110f; --surface: #12201c; --surface-2: #1a2c27; --ink: #eef5f3; --ink-2: #a6bab4; --ink-3: #6d837c;
-    --line: #24362f; --brand: #14b88a; --ok: #2fd6a4; --ok-soft: #123a2f; --erro: #ff6b6b; --erro-soft: #3a1717;
-    --aviso: #f0b43a; --aviso-soft: #362a10;
+    --bg: #eef2f1; --surface: #ffffff; --surface-2: #f1f5f4; --ink: #0f1f1c; --ink-2: #4b5d58; --ink-3: #8a9a95;
+    --line: #dfe6e4; --brand: #0d5c4f; --ok: #169c6b; --ok-soft: #e3f6ee; --erro: #d23b3b; --erro-soft: #fdeaea;
+    --aviso: #b87d06; --aviso-soft: #fdf4dd; --sombra: 0 1px 2px rgba(15,31,28,.06), 0 8px 24px rgba(15,31,28,.07);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Plus Jakarta Sans", system-ui, sans-serif; font-size: 15px; }
@@ -34,7 +34,7 @@
   .topo .rota { min-width: 0; }
   .topo .rota small { display: block; font-size: 11.5px; color: var(--ink-3); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
   .topo .rota b { display: block; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .conexao { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink-2); background: var(--surface); padding: 6px 10px; border-radius: 999px; flex-shrink: 0; }
+  .conexao { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink-2); background: var(--surface); box-shadow: var(--sombra); padding: 6px 10px; border-radius: 999px; flex-shrink: 0; }
   .conexao .bola { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
   .conexao.aguardando .bola { background: var(--aviso); animation: pulsa 1s infinite; }
   .conexao.off .bola { background: var(--erro); }
@@ -52,20 +52,21 @@
   .ferramentas { position: absolute; right: 10px; top: 10px; display: flex; gap: 8px; }
   .ferramentas button { width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,.5); color: #fff; display: grid; place-items: center; backdrop-filter: blur(4px); }
   .ferramentas button.ativo { background: var(--aviso); color: #000; }
-  .aviso-pausa { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); font-weight: 700; }
+  .aviso-pausa { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); font-weight: 700; color: #fff; }
 
-  .inicio { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; background: radial-gradient(circle at 50% 40%, #13322a, #000); }
+  .inicio { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; background: radial-gradient(circle at 50% 40%, #13322a, #000); color: #fff; }
   .inicio .btn { margin-top: 14px; }
 
   .painel { padding: 12px 14px 0; flex: 1; }
-  .modos { display: flex; background: var(--surface); border-radius: 14px; padding: 4px; gap: 4px; }
+  .modos { display: flex; background: var(--surface); border-radius: 14px; padding: 4px; gap: 4px; box-shadow: var(--sombra); }
   .modos button { flex: 1; border-radius: 10px; padding: 10px 6px; font-weight: 700; font-size: 13.5px; color: var(--ink-2); }
-  .modos button.ativo { background: var(--surface-2); color: var(--ok); }
+  .modos button.ativo { background: var(--ok-soft); color: var(--brand); }
 
-  .resultado { margin-top: 12px; border-radius: 16px; padding: 14px; background: var(--surface); display: flex; gap: 12px; align-items: center; min-height: 76px; border: 1.5px solid transparent; }
-  .resultado.ok { background: var(--ok-soft); border-color: rgba(47,214,164,.4); }
-  .resultado.erro { background: var(--erro-soft); border-color: rgba(255,107,107,.4); }
-  .resultado.aguardando { background: var(--aviso-soft); }
+  .resultado { margin-top: 12px; border-radius: 16px; padding: 14px; background: var(--surface); box-shadow: var(--sombra); display: flex; gap: 12px; align-items: center; min-height: 76px; border: 1.5px solid transparent; }
+  .resultado.ok { background: var(--ok-soft); border-color: rgba(22,156,107,.35); }
+  .resultado.erro { background: var(--erro-soft); border-color: rgba(210,59,59,.35); }
+  .resultado.aguardando, .resultado.aviso { background: var(--aviso-soft); border-color: rgba(184,125,6,.35); }
+  .resultado.aviso .txt b { color: var(--aviso); }
   .resultado.pisca { animation: pisca .45s ease-out; }
   @keyframes pisca { 0% { transform: scale(.97); } 100% { transform: scale(1); } }
   .resultado .txt { flex: 1; min-width: 0; }
@@ -78,19 +79,19 @@
 
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 18px; border-radius: 14px; font-weight: 700; }
   .btn:active { transform: scale(.98); }
-  .btn-primario { background: var(--brand); color: #04241c; }
-  .btn-sec { background: var(--surface-2); color: var(--ink); }
+  .btn-primario { background: var(--brand); color: #fff; }
+  .btn-sec { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
   .btn-mini { height: 36px; padding: 0 12px; border-radius: 10px; font-size: 13px; }
 
-  .qtd-box { margin-top: 12px; background: var(--surface); border-radius: 16px; padding: 14px; }
+  .qtd-box { margin-top: 12px; background: var(--surface); border-radius: 16px; padding: 14px; box-shadow: var(--sombra); }
   .qtd-box .prod b { display: block; font-size: 15px; }
   .qtd-box .prod span { font-size: 12.5px; color: var(--ink-2); }
   .qtd-linha { display: flex; gap: 8px; margin-top: 12px; }
-  .qtd-linha button { width: 56px; height: 56px; border-radius: 14px; background: var(--surface-2); font-size: 26px; font-weight: 700; flex-shrink: 0; }
+  .qtd-linha button { width: 56px; height: 56px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); font-size: 26px; font-weight: 700; flex-shrink: 0; }
   .qtd-linha input { flex: 1; min-width: 0; height: 56px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--bg); text-align: center; font-size: 28px; font-weight: 800; outline: none; }
   .qtd-linha input:focus { border-color: var(--brand); }
   .atalhos { display: flex; gap: 6px; margin-top: 8px; }
-  .atalhos button { flex: 1; height: 36px; border-radius: 10px; background: var(--surface-2); color: var(--ok); font-weight: 700; font-size: 13px; }
+  .atalhos button { flex: 1; height: 36px; border-radius: 10px; background: var(--ok-soft); color: var(--brand); font-weight: 700; font-size: 13px; }
   .qtd-acoes { display: flex; gap: 8px; margin-top: 12px; }
   .qtd-acoes .btn { flex: 1; }
 
@@ -105,7 +106,7 @@
   .rodape { position: sticky; bottom: 0; padding: 14px; background: linear-gradient(to top, var(--bg) 70%, transparent); }
   .rodape .btn { width: 100%; height: 54px; font-size: 16px; }
 
-  .fatal { margin: 40px 16px; padding: 20px; border-radius: 18px; background: var(--surface); text-align: center; line-height: 1.5; }
+  .fatal { margin: 40px 16px; padding: 20px; border-radius: 18px; background: var(--surface); box-shadow: var(--sombra); text-align: center; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -130,7 +131,7 @@
       <div id="inicio" class="inicio">
         <div>
           <div style="font-size:18px;font-weight:800">Leitor pronto</div>
-          <div style="color:var(--ink-2);font-size:13.5px;margin-top:4px">Mire no código de barras: cada leitura entra na transferência.</div>
+          <div style="color:rgba(255,255,255,.75);font-size:13.5px;margin-top:4px">Mire no código de barras: cada leitura entra na transferência.</div>
           <button class="btn btn-primario" onclick="iniciar()">Começar a bipar</button>
         </div>
       </div>
@@ -144,7 +145,8 @@
 
       <div id="resultado" class="resultado">
         <div class="txt"><b id="r-desc">Aguardando a primeira leitura</b><span id="r-sub">Afaste e aproxime para bipar o mesmo produto de novo.</span>
-          <div id="r-acao" class="acao oculto"><button class="btn btn-sec btn-mini" onclick="forcarDesconhecido()">Adicionar mesmo assim</button></div></div>
+          <div id="r-acao" class="acao oculto"><button class="btn btn-sec btn-mini" onclick="forcarDesconhecido()">Adicionar mesmo assim</button></div>
+          <div id="r-pergunta" class="acao oculto"><button class="btn btn-primario btn-mini" onclick="responderSemEstoque(true)">Sim, é esse</button><button class="btn btn-sec btn-mini" onclick="responderSemEstoque(false)">Não, descartar</button></div></div>
         <div class="qtd oculto" id="r-qtd-box"><b id="r-qtd">0</b><span>na transf.</span></div>
       </div>
 
@@ -193,6 +195,7 @@ if (!window.opener) {
   $("fatal").classList.remove("oculto");
   $("fatal").innerHTML = "<b>Abra o leitor pela transferência.</b><br>Entre no sistema de Transferência de Mercadorias, abra uma transferência e toque em <b>Escanear código</b>.";
 }
+atualizarConexao();
 
 // ---------- som / vibração ----------
 var audioCtx;
@@ -250,7 +253,7 @@ function visto() {}
 // segurar a câmera parada em cima do produto não fica somando sozinho.
 function lido(cod) {
   var agora = Date.now();
-  if (L.pausado || L.qtdCtx) return;
+  if (L.pausado || L.qtdCtx || L.pergunta) return;
   if (cod === L.ultimo.cod && agora - L.ultimo.visto < 900) { L.ultimo.visto = agora; return; }
   L.ultimo = { cod: cod, visto: agora };
   enviar({ tipo: "bipe", cod: cod, modo: L.modo });
@@ -310,6 +313,13 @@ window.addEventListener("message", function (e) {
 function tratarResposta(orig, r) {
   if (!r.ok) {
     bip(false); piscarJanela("erro");
+    if (r.motivo === "sem_estoque") {
+      L.pergunta = { cod: orig.cod, modo: orig.modo, id: orig.id };
+      mostrarResultado("aviso", "Não tem na loja " + (r.loja || ""), (r.desc || "SKU " + r.sku) + " · SKU " + r.sku + " está com estoque 0. É esse item mesmo?");
+      $("r-pergunta").classList.remove("oculto");
+      atualizarHistorico(orig.id, "est. 0?", "pend", r.desc || r.sku);
+      return;
+    }
     if (r.motivo === "nao_cadastrado") {
       L.desconhecido = orig.cod;
       mostrarResultado("erro", "Código não cadastrado", "Código " + orig.cod + " — confira o produto.", true);
@@ -329,7 +339,8 @@ function tratarResposta(orig, r) {
   bip(true); piscarJanela("ok");
   L.total += r.somado || 1;
   $("contador").textContent = L.total + (L.total === 1 ? " bipe" : " bipes");
-  mostrarResultado("ok", r.desc || "Produto sem descrição", "SKU " + r.sku + " · +" + (r.somado || 1), false, r.qtd);
+  mostrarResultado("ok", r.desc || "Produto sem descrição", "SKU " + r.sku + " · +" + (r.somado || 1) + (r.estoque != null ? " · estoque na loja: " + r.estoque : ""), false, r.qtd);
+  if (r.estoque != null && r.estoque > 0 && r.qtd > r.estoque) $("r-sub").textContent += " ⚠ acima do estoque";
   if (orig.tipo === "bipe") atualizarHistorico(orig.id, "+" + (r.somado || 1), "", r.desc || r.sku);
   else addHistorico(orig.id, r.sku, "+" + (r.somado || 1), "", r.desc || r.sku);
 }
@@ -339,10 +350,19 @@ function mostrarResultado(tipo, titulo, sub, comAcao, qtd) {
   el.className = "resultado " + tipo; void el.offsetWidth; el.classList.add("pisca");
   $("r-desc").textContent = titulo; $("r-sub").textContent = sub;
   $("r-acao").classList.toggle("oculto", !comAcao);
+  $("r-pergunta").classList.add("oculto");
   $("r-qtd-box").classList.toggle("oculto", qtd == null);
   if (qtd != null) $("r-qtd").textContent = qtd;
 }
 
+function responderSemEstoque(sim) {
+  var pg = L.pergunta; if (!pg) return;
+  L.pergunta = null;
+  $("r-pergunta").classList.add("oculto");
+  L.ultimo.visto = Date.now(); // não reler na hora o mesmo produto
+  if (sim) { removerHistorico(pg.id); enviar({ tipo: "confirmar", cod: pg.cod, modo: pg.modo }); }
+  else { atualizarHistorico(pg.id, "descartado", "erro"); mostrarResultado("", "Leitura descartada", "Pode bipar o próximo produto."); }
+}
 function forcarDesconhecido() {
   if (!L.desconhecido) return;
   var cod = L.desconhecido; L.desconhecido = null;
@@ -354,7 +374,7 @@ function forcarDesconhecido() {
 function abrirQtd(r, idOrig) {
   L.qtdCtx = { sku: r.sku, ean: r.ean, desc: r.desc, idOrig: idOrig };
   $("q-desc").textContent = r.desc || "Produto sem descrição";
-  $("q-sub").textContent = "SKU " + r.sku + (r.qtd ? " · já tem " + r.qtd + " na transferência" : "");
+  $("q-sub").textContent = "SKU " + r.sku + (r.qtd ? " · já tem " + r.qtd + " na transferência" : "") + (r.estoque != null ? " · estoque na loja: " + r.estoque : "");
   $("q-input").value = 1;
   $("qtd-box").classList.remove("oculto");
   $("resultado").classList.add("oculto");
