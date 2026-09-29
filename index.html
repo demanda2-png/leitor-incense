@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#0a4a40">
+<title>Leitor · Transferência Incense</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<!--
+  LEITOR CONTÍNUO · TRANSFERÊNCIA DE MERCADORIAS
+  O Apps Script roda dentro de um iframe do Google sem permissão de câmera
+  ao vivo. Esta página fica hospedada FORA do Google (GitHub Pages), é aberta
+  pelo botão "Escanear código" da transferência e manda cada leitura de volta
+  para ela (window.opener.postMessage). Quem grava na planilha continua
+  sendo a transferência; esta página só lê o código e mostra o resultado.
+-->
+<style>
+  :root {
+    --bg: #07110f; --surface: #12201c; --surface-2: #1a2c27; --ink: #eef5f3; --ink-2: #a6bab4; --ink-3: #6d837c;
+    --line: #24362f; --brand: #14b88a; --ok: #2fd6a4; --ok-soft: #123a2f; --erro: #ff6b6b; --erro-soft: #3a1717;
+    --aviso: #f0b43a; --aviso-soft: #362a10;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Plus Jakarta Sans", system-ui, sans-serif; font-size: 15px; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; background: none; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .oculto { display: none !important; }
+  .app { max-width: 560px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+
+  .topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; }
+  .topo .rota { min-width: 0; }
+  .topo .rota small { display: block; font-size: 11.5px; color: var(--ink-3); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .topo .rota b { display: block; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conexao { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink-2); background: var(--surface); padding: 6px 10px; border-radius: 999px; flex-shrink: 0; }
+  .conexao .bola { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .conexao.aguardando .bola { background: var(--aviso); animation: pulsa 1s infinite; }
+  .conexao.off .bola { background: var(--erro); }
+  @keyframes pulsa { 50% { opacity: .3; } }
+
+  .camera { position: relative; margin: 0 14px; border-radius: 20px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; }
+  #leitor { width: 100%; height: 100%; }
+  #leitor video { width: 100% !important; height: 100% !important; object-fit: cover; display: block; }
+  #leitor img, #qr-shaded-region { display: none !important; }
+  .janela { position: absolute; left: 7%; right: 7%; top: 30%; bottom: 30%; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(0,0,0,.35); border: 2px solid rgba(255,255,255,.75); pointer-events: none; transition: border-color .15s, box-shadow .15s; }
+  .janela.ok { border-color: var(--ok); box-shadow: 0 0 0 9999px rgba(20,184,138,.25); }
+  .janela.erro { border-color: var(--erro); box-shadow: 0 0 0 9999px rgba(255,80,80,.25); }
+  .linha-laser { position: absolute; left: 10%; right: 10%; top: 50%; height: 2px; background: #ff4d4d; box-shadow: 0 0 10px #ff4d4d; pointer-events: none; }
+  .camera.pausada .linha-laser { display: none; }
+  .ferramentas { position: absolute; right: 10px; top: 10px; display: flex; gap: 8px; }
+  .ferramentas button { width: 42px; height: 42px; border-radius: 50%; background: rgba(0,0,0,.5); color: #fff; display: grid; place-items: center; backdrop-filter: blur(4px); }
+  .ferramentas button.ativo { background: var(--aviso); color: #000; }
+  .aviso-pausa { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); font-weight: 700; }
+
+  .inicio { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; background: radial-gradient(circle at 50% 40%, #13322a, #000); }
+  .inicio .btn { margin-top: 14px; }
+
+  .painel { padding: 12px 14px 0; flex: 1; }
+  .modos { display: flex; background: var(--surface); border-radius: 14px; padding: 4px; gap: 4px; }
+  .modos button { flex: 1; border-radius: 10px; padding: 10px 6px; font-weight: 700; font-size: 13.5px; color: var(--ink-2); }
+  .modos button.ativo { background: var(--surface-2); color: var(--ok); }
+
+  .resultado { margin-top: 12px; border-radius: 16px; padding: 14px; background: var(--surface); display: flex; gap: 12px; align-items: center; min-height: 76px; border: 1.5px solid transparent; }
+  .resultado.ok { background: var(--ok-soft); border-color: rgba(47,214,164,.4); }
+  .resultado.erro { background: var(--erro-soft); border-color: rgba(255,107,107,.4); }
+  .resultado.aguardando { background: var(--aviso-soft); }
+  .resultado.pisca { animation: pisca .45s ease-out; }
+  @keyframes pisca { 0% { transform: scale(.97); } 100% { transform: scale(1); } }
+  .resultado .txt { flex: 1; min-width: 0; }
+  .resultado .txt b { display: block; font-size: 15px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .resultado .txt span { font-size: 12.5px; color: var(--ink-2); }
+  .resultado .qtd { text-align: right; flex-shrink: 0; }
+  .resultado .qtd b { display: block; font-size: 30px; line-height: 1; color: var(--ok); letter-spacing: -.02em; }
+  .resultado .qtd span { font-size: 11.5px; color: var(--ink-2); font-weight: 600; }
+  .resultado .acao { margin-top: 10px; display: flex; gap: 8px; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 18px; border-radius: 14px; font-weight: 700; }
+  .btn:active { transform: scale(.98); }
+  .btn-primario { background: var(--brand); color: #04241c; }
+  .btn-sec { background: var(--surface-2); color: var(--ink); }
+  .btn-mini { height: 36px; padding: 0 12px; border-radius: 10px; font-size: 13px; }
+
+  .qtd-box { margin-top: 12px; background: var(--surface); border-radius: 16px; padding: 14px; }
+  .qtd-box .prod b { display: block; font-size: 15px; }
+  .qtd-box .prod span { font-size: 12.5px; color: var(--ink-2); }
+  .qtd-linha { display: flex; gap: 8px; margin-top: 12px; }
+  .qtd-linha button { width: 56px; height: 56px; border-radius: 14px; background: var(--surface-2); font-size: 26px; font-weight: 700; flex-shrink: 0; }
+  .qtd-linha input { flex: 1; min-width: 0; height: 56px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--bg); text-align: center; font-size: 28px; font-weight: 800; outline: none; }
+  .qtd-linha input:focus { border-color: var(--brand); }
+  .atalhos { display: flex; gap: 6px; margin-top: 8px; }
+  .atalhos button { flex: 1; height: 36px; border-radius: 10px; background: var(--surface-2); color: var(--ok); font-weight: 700; font-size: 13px; }
+  .qtd-acoes { display: flex; gap: 8px; margin-top: 12px; }
+  .qtd-acoes .btn { flex: 1; }
+
+  .recentes { margin-top: 16px; }
+  .recentes h3 { margin: 0 0 8px; font-size: 13px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; display: flex; justify-content: space-between; }
+  .recentes .item { display: flex; justify-content: space-between; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .recentes .item span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
+  .recentes .item b { flex-shrink: 0; }
+  .recentes .item.erro b { color: var(--erro); }
+  .recentes .item.pend b { color: var(--aviso); }
+
+  .rodape { position: sticky; bottom: 0; padding: 14px; background: linear-gradient(to top, var(--bg) 70%, transparent); }
+  .rodape .btn { width: 100%; height: 54px; font-size: 16px; }
+
+  .fatal { margin: 40px 16px; padding: 20px; border-radius: 18px; background: var(--surface); text-align: center; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topo">
+    <div class="rota"><small id="t-id">Transferência</small><b id="t-rota">—</b></div>
+    <div id="conexao" class="conexao"><span class="bola"></span><span id="conexao-txt">Conectado</span></div>
+  </div>
+
+  <div id="fatal" class="fatal oculto"></div>
+
+  <div id="conteudo">
+    <div class="camera" id="camera">
+      <div id="leitor"></div>
+      <div class="janela" id="janela"></div>
+      <div class="linha-laser"></div>
+      <div class="ferramentas">
+        <button id="btn-lanterna" class="oculto" onclick="alternarLanterna()" title="Lanterna"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l-2 7h-4z"/><path d="M10 9v11a2 2 0 0 0 4 0V9"/></svg></button>
+        <button id="btn-pausa" onclick="alternarPausa()" title="Pausar"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+      </div>
+      <div id="aviso-pausa" class="aviso-pausa oculto">Pausado — toque em ▶ para continuar</div>
+      <div id="inicio" class="inicio">
+        <div>
+          <div style="font-size:18px;font-weight:800">Leitor pronto</div>
+          <div style="color:var(--ink-2);font-size:13.5px;margin-top:4px">Mire no código de barras: cada leitura entra na transferência.</div>
+          <button class="btn btn-primario" onclick="iniciar()">Começar a bipar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="painel">
+      <div class="modos" id="modos">
+        <button data-m="bipe">Bipe a bipe (+1)</button>
+        <button data-m="qtd">Com quantidade</button>
+      </div>
+
+      <div id="resultado" class="resultado">
+        <div class="txt"><b id="r-desc">Aguardando a primeira leitura</b><span id="r-sub">Afaste e aproxime para bipar o mesmo produto de novo.</span>
+          <div id="r-acao" class="acao oculto"><button class="btn btn-sec btn-mini" onclick="forcarDesconhecido()">Adicionar mesmo assim</button></div></div>
+        <div class="qtd oculto" id="r-qtd-box"><b id="r-qtd">0</b><span>na transf.</span></div>
+      </div>
+
+      <div id="qtd-box" class="qtd-box oculto">
+        <div class="prod"><b id="q-desc"></b><span id="q-sub"></span></div>
+        <div class="qtd-linha">
+          <button onclick="ajustar(-1)">−</button>
+          <input id="q-input" class="mono" type="number" inputmode="numeric" min="0" value="1">
+          <button onclick="ajustar(1)">+</button>
+        </div>
+        <div class="atalhos"><button onclick="ajustar(5)">+5</button><button onclick="ajustar(10)">+10</button><button onclick="ajustar(12)">+12</button><button onclick="ajustar(24)">+24</button></div>
+        <div class="qtd-acoes"><button class="btn btn-sec" onclick="cancelarQtd()">Cancelar</button><button class="btn btn-primario" onclick="gravarQtd()">Gravar</button></div>
+      </div>
+
+      <div class="recentes">
+        <h3><span>Nesta sessão</span><span id="contador">0 bipes</span></h3>
+        <div id="lista"></div>
+      </div>
+    </div>
+
+    <div class="rodape"><button class="btn btn-sec" onclick="concluir()">✓ Concluir e voltar para a transferência</button></div>
+  </div>
+</div>
+
+<script>
+var APP = "leitor-incense";
+var P = new URLSearchParams(location.search);
+var L = {
+  cam: null, rodando: false, pausado: false, lanterna: false,
+  modo: P.get("modo") === "qtd" ? "qtd" : "bipe",
+  ultimo: { cod: "", visto: 0 },
+  pendentes: {},      // id -> mensagem ainda sem resposta da transferência
+  historico: [],      // últimas leituras exibidas
+  total: 0, seq: 0,
+  desconhecido: null, qtdCtx: null
+};
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+$("t-id").textContent = P.get("id") ? "Transferência " + P.get("id") : "Transferência";
+$("t-rota").textContent = (P.get("o") || "?") + " → " + (P.get("d") || "?");
+
+if (!window.opener) {
+  $("conteudo").classList.add("oculto");
+  $("fatal").classList.remove("oculto");
+  $("fatal").innerHTML = "<b>Abra o leitor pela transferência.</b><br>Entre no sistema de Transferência de Mercadorias, abra uma transferência e toque em <b>Escanear código</b>.";
+}
+
+// ---------- som / vibração ----------
+var audioCtx;
+function bip(ok) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = ok ? "sine" : "square"; o.frequency.value = ok ? 1250 : 220;
+    var dur = ok ? 0.1 : 0.35;
+    g.gain.setValueAtTime(0.2, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + dur);
+  } catch (e) {}
+  try { if (navigator.vibrate) navigator.vibrate(ok ? 50 : [90, 60, 90]); } catch (e) {}
+}
+function piscarJanela(tipo) {
+  var j = $("janela"); j.className = "janela " + tipo;
+  clearTimeout(piscarJanela.t); piscarJanela.t = setTimeout(function () { j.className = "janela"; }, 450);
+}
+
+// ---------- modos ----------
+function renderModo() { $("modos").querySelectorAll("button").forEach(function (b) { b.classList.toggle("ativo", b.dataset.m === L.modo); }); }
+$("modos").addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) { L.modo = b.dataset.m; renderModo(); } });
+renderModo();
+
+// ---------- câmera ----------
+function formatos() {
+  var F = Html5QrcodeSupportedFormats;
+  return [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF, F.CODABAR];
+}
+function iniciar() {
+  bip(true); // libera o áudio no primeiro toque
+  if (typeof Html5Qrcode === "undefined") { mostrarResultado("erro", "Leitor não carregou", "Verifique a internet e recarregue a página."); return; }
+  L.cam = L.cam || new Html5Qrcode("leitor", { formatsToSupport: formatos(), experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false });
+  L.cam.start({ facingMode: "environment" }, {
+    fps: 15,
+    qrbox: function (w, h) { return { width: Math.floor(w * 0.86), height: Math.floor(h * 0.4) }; },
+    videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }
+  }, lido, visto).then(function () {
+    L.rodando = true;
+    $("inicio").classList.add("oculto");
+    try {
+      var cap = L.cam.getRunningTrackCapabilities();
+      if (cap && cap.torch) $("btn-lanterna").classList.remove("oculto");
+    } catch (e) {}
+  }).catch(function (e) {
+    mostrarResultado("erro", "Não consegui abrir a câmera", String(e && e.message ? e.message : e) + " — libere a câmera nas permissões do navegador.");
+  });
+}
+// Chamado a cada quadro SEM código: não usamos, mas o html5-qrcode exige.
+function visto() {}
+
+// "Mira e bipa": depois de ler um código, só aceita o MESMO código de novo
+// quando ele sumir da câmera por um instante (afastar e aproximar). Assim
+// segurar a câmera parada em cima do produto não fica somando sozinho.
+function lido(cod) {
+  var agora = Date.now();
+  if (L.pausado || L.qtdCtx) return;
+  if (cod === L.ultimo.cod && agora - L.ultimo.visto < 900) { L.ultimo.visto = agora; return; }
+  L.ultimo = { cod: cod, visto: agora };
+  enviar({ tipo: "bipe", cod: cod, modo: L.modo });
+}
+
+function alternarPausa() {
+  if (!L.rodando) return;
+  L.pausado = !L.pausado;
+  $("camera").classList.toggle("pausada", L.pausado);
+  $("aviso-pausa").classList.toggle("oculto", !L.pausado);
+  $("btn-pausa").innerHTML = L.pausado
+    ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5l12 7-12 7z"/></svg>'
+    : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+}
+function alternarLanterna() {
+  L.lanterna = !L.lanterna;
+  L.cam.applyVideoConstraints({ advanced: [{ torch: L.lanterna }] }).catch(function () {});
+  $("btn-lanterna").classList.toggle("ativo", L.lanterna);
+}
+
+// ---------- conversa com a transferência ----------
+// Cada mensagem tem um id e é reenviada até a transferência responder
+// (a aba dela pode estar em segundo plano ou momentaneamente ocupada).
+function enviar(msg) {
+  msg.app = APP; msg.id = Date.now() + "-" + (++L.seq);
+  L.pendentes[msg.id] = msg;
+  if (msg.tipo === "bipe") addHistorico(msg.id, msg.cod, "…", "pend");
+  postar(msg);
+  atualizarConexao();
+}
+function postar(msg) {
+  try { window.opener.postMessage(msg, "*"); } catch (e) {}
+}
+setInterval(function () {
+  if (!window.opener || window.opener.closed) { atualizarConexao(); return; }
+  Object.keys(L.pendentes).forEach(function (id) { postar(L.pendentes[id]); });
+  atualizarConexao();
+}, 2500);
+
+function atualizarConexao() {
+  var c = $("conexao"), n = Object.keys(L.pendentes).length;
+  if (!window.opener || window.opener.closed) { c.className = "conexao off"; $("conexao-txt").textContent = "Transferência fechada"; return; }
+  c.className = "conexao" + (n ? " aguardando" : "");
+  $("conexao-txt").textContent = n ? "Enviando " + n + "…" : "Conectado";
+}
+
+window.addEventListener("message", function (e) {
+  var m = e.data;
+  if (!m || m.app !== APP || m.tipo !== "resposta" || e.source !== window.opener) return;
+  var orig = L.pendentes[m.id];
+  if (!orig) return; // resposta repetida
+  delete L.pendentes[m.id];
+  atualizarConexao();
+  tratarResposta(orig, m);
+});
+
+function tratarResposta(orig, r) {
+  if (!r.ok) {
+    bip(false); piscarJanela("erro");
+    if (r.motivo === "nao_cadastrado") {
+      L.desconhecido = orig.cod;
+      mostrarResultado("erro", "Código não cadastrado", "Código " + orig.cod + " — confira o produto.", true);
+      atualizarHistorico(orig.id, "não cad.", "erro");
+    } else {
+      mostrarResultado("erro", "Não entrou", r.erro || "Erro na transferência.");
+      atualizarHistorico(orig.id, "erro", "erro");
+    }
+    return;
+  }
+  if (r.pedirQtd) {
+    atualizarHistorico(orig.id, "qtd?", "pend");
+    abrirQtd(r, orig.id);
+    bip(true); piscarJanela("ok");
+    return;
+  }
+  bip(true); piscarJanela("ok");
+  L.total += r.somado || 1;
+  $("contador").textContent = L.total + (L.total === 1 ? " bipe" : " bipes");
+  mostrarResultado("ok", r.desc || "Produto sem descrição", "SKU " + r.sku + " · +" + (r.somado || 1), false, r.qtd);
+  if (orig.tipo === "bipe") atualizarHistorico(orig.id, "+" + (r.somado || 1), "", r.desc || r.sku);
+  else addHistorico(orig.id, r.sku, "+" + (r.somado || 1), "", r.desc || r.sku);
+}
+
+function mostrarResultado(tipo, titulo, sub, comAcao, qtd) {
+  var el = $("resultado");
+  el.className = "resultado " + tipo; void el.offsetWidth; el.classList.add("pisca");
+  $("r-desc").textContent = titulo; $("r-sub").textContent = sub;
+  $("r-acao").classList.toggle("oculto", !comAcao);
+  $("r-qtd-box").classList.toggle("oculto", qtd == null);
+  if (qtd != null) $("r-qtd").textContent = qtd;
+}
+
+function forcarDesconhecido() {
+  if (!L.desconhecido) return;
+  var cod = L.desconhecido; L.desconhecido = null;
+  $("r-acao").classList.add("oculto");
+  enviar({ tipo: "forcar", cod: cod, q: 1 });
+}
+
+// ---------- quantidade ----------
+function abrirQtd(r, idOrig) {
+  L.qtdCtx = { sku: r.sku, ean: r.ean, desc: r.desc, idOrig: idOrig };
+  $("q-desc").textContent = r.desc || "Produto sem descrição";
+  $("q-sub").textContent = "SKU " + r.sku + (r.qtd ? " · já tem " + r.qtd + " na transferência" : "");
+  $("q-input").value = 1;
+  $("qtd-box").classList.remove("oculto");
+  $("resultado").classList.add("oculto");
+  setTimeout(function () { $("q-input").focus(); $("q-input").select(); }, 50);
+}
+function ajustar(n) { var i = $("q-input"); i.value = Math.max(0, (parseInt(i.value, 10) || 0) + n); }
+$("q-input").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); gravarQtd(); } });
+function fecharQtd() {
+  $("qtd-box").classList.add("oculto"); $("resultado").classList.remove("oculto");
+  $("q-input").blur();
+  // Evita reler na hora o mesmo produto que acabou de ser gravado.
+  L.ultimo.visto = Date.now();
+  L.qtdCtx = null;
+}
+function gravarQtd() {
+  var c = L.qtdCtx; if (!c) return;
+  var q = Math.max(0, parseInt($("q-input").value, 10) || 0);
+  removerHistorico(c.idOrig);
+  fecharQtd();
+  if (q > 0) enviar({ tipo: "somar", sku: c.sku, ean: c.ean, desc: c.desc, q: q });
+}
+function cancelarQtd() { if (L.qtdCtx) removerHistorico(L.qtdCtx.idOrig); fecharQtd(); }
+
+// ---------- histórico da sessão ----------
+function addHistorico(id, titulo, valor, classe, desc) {
+  L.historico.unshift({ id: id, titulo: desc || titulo, valor: valor, classe: classe });
+  L.historico = L.historico.slice(0, 12);
+  renderHistorico();
+}
+function atualizarHistorico(id, valor, classe, desc) {
+  L.historico.forEach(function (h) { if (h.id === id) { h.valor = valor; h.classe = classe; if (desc) h.titulo = desc; } });
+  renderHistorico();
+}
+function removerHistorico(id) { L.historico = L.historico.filter(function (h) { return h.id !== id; }); renderHistorico(); }
+function renderHistorico() {
+  $("lista").innerHTML = L.historico.map(function (h) {
+    return '<div class="item ' + (h.classe || "") + '"><span>' + esc(h.titulo) + '</span><b class="mono">' + esc(h.valor) + "</b></div>";
+  }).join("");
+}
+
+// ---------- concluir ----------
+function concluir() {
+  var n = Object.keys(L.pendentes).length;
+  if (n && !confirm(n + " leitura(s) ainda não confirmada(s) pela transferência. Sair mesmo assim?")) return;
+  try { if (L.cam && L.rodando) L.cam.stop(); } catch (e) {}
+  try { if (window.opener) window.opener.focus(); } catch (e) {}
+  window.close();
+  // Se o navegador não deixar fechar a aba:
+  setTimeout(function () {
+    $("conteudo").classList.add("oculto");
+    $("fatal").classList.remove("oculto");
+    $("fatal").innerHTML = "<b>Pronto!</b><br>Pode fechar esta aba e voltar para a aba da transferência.";
+  }, 300);
+}
+</script>
+</body>
+</html>
