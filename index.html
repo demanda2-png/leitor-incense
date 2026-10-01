@@ -339,7 +339,7 @@ function tratarResposta(orig, r) {
   bip(true); piscarJanela("ok");
   L.total += r.somado || 1;
   $("contador").textContent = L.total + (L.total === 1 ? " bipe" : " bipes");
-  mostrarResultado("ok", r.desc || "Produto sem descrição", "SKU " + r.sku + " · +" + (r.somado || 1) + (r.estoque != null ? " · estoque na loja: " + r.estoque : ""), false, r.qtd);
+  mostrarResultado("ok", r.desc || "Produto sem descrição", (r.caixa ? "📦 Caixa " + r.caixa + " · " : "") + "SKU " + r.sku + " · +" + (r.somado || 1) + (r.estoque != null ? " · estoque na loja: " + r.estoque : ""), false, r.qtd);
   if (r.estoque != null && r.estoque > 0 && r.qtd > r.estoque) $("r-sub").textContent += " ⚠ acima do estoque";
   if (orig.tipo === "bipe") atualizarHistorico(orig.id, "+" + (r.somado || 1), "", r.desc || r.sku);
   else addHistorico(orig.id, r.sku, "+" + (r.somado || 1), "", r.desc || r.sku);
@@ -374,7 +374,7 @@ function forcarDesconhecido() {
 function abrirQtd(r, idOrig) {
   L.qtdCtx = { sku: r.sku, ean: r.ean, desc: r.desc, idOrig: idOrig };
   $("q-desc").textContent = r.desc || "Produto sem descrição";
-  $("q-sub").textContent = "SKU " + r.sku + (r.qtd ? " · já tem " + r.qtd + " na transferência" : "") + (r.estoque != null ? " · estoque na loja: " + r.estoque : "");
+  $("q-sub").textContent = (r.caixa ? "📦 Caixa " + r.caixa + " · " : "") + "SKU " + r.sku + (r.qtd ? " · já tem " + r.qtd + " nesta caixa" : "") + (r.estoque != null ? " · estoque na loja: " + r.estoque : "");
   $("q-input").value = 1;
   $("qtd-box").classList.remove("oculto");
   $("resultado").classList.add("oculto");
