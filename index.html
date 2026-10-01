@@ -138,13 +138,13 @@
     </div>
 
     <div class="painel">
-      <div class="modos" id="modos">
+      <div class="modos oculto" id="modos">
         <button data-m="bipe">Bipe a bipe (+1)</button>
         <button data-m="qtd">Com quantidade</button>
       </div>
 
       <div id="resultado" class="resultado">
-        <div class="txt"><b id="r-desc">Aguardando a primeira leitura</b><span id="r-sub">Afaste e aproxime para bipar o mesmo produto de novo.</span>
+        <div class="txt"><b id="r-desc">Aguardando a primeira leitura</b><span id="r-sub">Bipe o produto e informe a quantidade.</span>
           <div id="r-acao" class="acao oculto"><button class="btn btn-sec btn-mini" onclick="forcarDesconhecido()">Adicionar mesmo assim</button></div>
           <div id="r-pergunta" class="acao oculto"><button class="btn btn-primario btn-mini" onclick="responderSemEstoque(true)">Sim, é esse</button><button class="btn btn-sec btn-mini" onclick="responderSemEstoque(false)">Não, descartar</button></div></div>
         <div class="qtd oculto" id="r-qtd-box"><b id="r-qtd">0</b><span>na transf.</span></div>
@@ -176,7 +176,7 @@ var APP = "leitor-incense";
 var P = new URLSearchParams(location.search);
 var L = {
   cam: null, rodando: false, pausado: false, lanterna: false,
-  modo: P.get("modo") === "qtd" ? "qtd" : "bipe",
+  modo: "qtd", // sempre bipa e informa a quantidade
   ultimo: { cod: "", visto: 0 },
   pendentes: {},      // id -> mensagem ainda sem resposta da transferência
   historico: [],      // últimas leituras exibidas
