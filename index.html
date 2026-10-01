@@ -42,7 +42,8 @@
 
   .camera { position: relative; margin: 0 14px; border-radius: 20px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; }
   #leitor { width: 100%; height: 100%; }
-  #leitor video { width: 100% !important; height: 100% !important; object-fit: cover; display: block; }
+  #leitor video { width: 100% !important; height: 100% !important; object-fit: cover; display: block; position: absolute; inset: 0; }
+  #leitor { position: relative; }
   #leitor img, #qr-shaded-region { display: none !important; }
   .janela { position: absolute; left: 7%; right: 7%; top: 30%; bottom: 30%; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(0,0,0,.35); border: 2px solid rgba(255,255,255,.75); pointer-events: none; transition: border-color .15s, box-shadow .15s; }
   .janela.ok { border-color: var(--ok); box-shadow: 0 0 0 9999px rgba(20,184,138,.25); }
@@ -222,31 +223,116 @@ $("modos").addEventListener("click", function (e) { var b = e.target.closest("bu
 renderModo();
 
 // ---------- câmera ----------
+// Dois motores de leitura:
+// 1. NATIVO (BarcodeDetector do Chrome/Android): roda no próprio sistema,
+//    muito mais leve — é o usado quase sempre no Android.
+// 2. BIBLIOTECA (html5-qrcode): reserva pra navegador sem o nativo.
+// Os dois em 1280x720, ~8 leituras/s, só formatos de código de produto, e a
+// leitura PAUSA enquanto o quadro de quantidade/pergunta está aberto e quando
+// a aba sai da tela (é isso que esquentava o celular e fazia travar).
+var FORMATOS_NATIVOS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "itf", "code_39"];
+var INTERVALO_LEITURA = 125; // ms
+var VIDEO = { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } };
+
 function formatos() {
   var F = Html5QrcodeSupportedFormats;
-  return [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF, F.CODABAR];
+  return [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.ITF];
 }
+function lendoAgora() { return L.rodando && !L.pausado && !L.qtdCtx && !L.pergunta && !document.hidden; }
+
 function iniciar() {
   bip(true); // libera o áudio no primeiro toque
-  if (typeof Html5Qrcode === "undefined") { mostrarResultado("erro", "Leitor não carregou", "Verifique a internet e recarregue a página."); return; }
-  L.cam = L.cam || new Html5Qrcode("leitor", { formatsToSupport: formatos(), experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false });
-  L.cam.start({ facingMode: "environment" }, {
-    fps: 15,
-    qrbox: function (w, h) { return { width: Math.floor(w * 0.86), height: Math.floor(h * 0.4) }; },
-    videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }
-  }, lido, visto).then(function () {
+  L.querCamera = true;
+  ligarCamera();
+}
+
+function ligarCamera() {
+  if (L.rodando || L.ligando) return;
+  L.ligando = true;
+  detectorNativo().then(function (det) {
+    return det ? ligarNativo(det) : ligarBiblioteca();
+  }).then(function () {
     L.rodando = true;
     $("inicio").classList.add("oculto");
-    try {
-      var cap = L.cam.getRunningTrackCapabilities();
-      if (cap && cap.torch) $("btn-lanterna").classList.remove("oculto");
-    } catch (e) {}
+    if (temLanterna()) $("btn-lanterna").classList.remove("oculto");
   }).catch(function (e) {
     mostrarResultado("erro", "Não consegui abrir a câmera", String(e && e.message ? e.message : e) + " — libere a câmera nas permissões do navegador.");
+  }).then(function () { L.ligando = false; });
+}
+
+function detectorNativo() {
+  if (!("BarcodeDetector" in window)) return Promise.resolve(null);
+  return BarcodeDetector.getSupportedFormats().then(function (sup) {
+    var f = FORMATOS_NATIVOS.filter(function (x) { return sup.indexOf(x) !== -1; });
+    return f.length ? new BarcodeDetector({ formats: f }) : null;
+  }).catch(function () { return null; });
+}
+
+function ligarNativo(det) {
+  return navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: false }).then(function (stream) {
+    L.motor = "nativo";
+    L.stream = stream;
+    var v = L.video;
+    if (!v) {
+      v = L.video = document.createElement("video");
+      v.setAttribute("playsinline", ""); v.muted = true; v.autoplay = true;
+      $("leitor").appendChild(v);
+    }
+    v.srcObject = stream;
+    return v.play().then(function () {
+      var ocupado = false;
+      clearInterval(L.loop);
+      L.loop = setInterval(function () {
+        if (ocupado || !lendoAgora() || v.readyState < 2) return;
+        ocupado = true;
+        det.detect(v).then(function (r) {
+          if (r && r.length) lido(r[0].rawValue);
+        }).catch(function () {}).then(function () { ocupado = false; });
+      }, INTERVALO_LEITURA);
+    });
   });
 }
-// Chamado a cada quadro SEM código: não usamos, mas o html5-qrcode exige.
-function visto() {}
+
+function ligarBiblioteca() {
+  if (typeof Html5Qrcode === "undefined") return Promise.reject(new Error("Leitor não carregou. Verifique a internet e recarregue a página."));
+  L.motor = "biblioteca";
+  L.cam = L.cam || new Html5Qrcode("leitor", { formatsToSupport: formatos(), experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false });
+  return L.cam.start({ facingMode: "environment" }, {
+    fps: 8,
+    qrbox: function (w, h) { return { width: Math.floor(w * 0.86), height: Math.floor(h * 0.4) }; },
+    videoConstraints: VIDEO
+  }, function (cod) { if (lendoAgora()) lido(cod); }, function () {});
+}
+
+function desligarCamera() {
+  clearInterval(L.loop);
+  if (L.motor === "nativo" && L.stream) { L.stream.getTracks().forEach(function (t) { t.stop(); }); L.stream = null; }
+  if (L.motor === "biblioteca" && L.cam && L.rodando) { try { L.cam.stop(); } catch (e) {} }
+  L.rodando = false; L.lanterna = false;
+  $("btn-lanterna").classList.remove("ativo");
+}
+
+// Na biblioteca, pausar de verdade o processamento enquanto digita a quantidade.
+function pausarLeitura() { if (L.motor === "biblioteca" && L.rodando) { try { L.cam.pause(true); } catch (e) {} } }
+function retomarLeitura() { if (L.motor === "biblioteca" && L.rodando) { try { L.cam.resume(); } catch (e) {} } }
+
+// Aba saiu da tela (voltou pra transferência, bloqueou o celular): desliga a
+// câmera. Ao voltar, religa sozinha.
+document.addEventListener("visibilitychange", function () {
+  if (document.hidden) desligarCamera();
+  else if (L.querCamera) ligarCamera();
+});
+
+function trilhaVideo() {
+  if (L.motor === "nativo" && L.stream) return L.stream.getVideoTracks()[0];
+  return null;
+}
+function temLanterna() {
+  try {
+    if (L.motor === "nativo") { var t = trilhaVideo(); return !!(t && t.getCapabilities && t.getCapabilities().torch); }
+    var cap = L.cam.getRunningTrackCapabilities(); return !!(cap && cap.torch);
+  } catch (e) { return false; }
+}
 
 // "Mira e bipa": depois de ler um código, só aceita o MESMO código de novo
 // quando ele sumir da câmera por um instante (afastar e aproximar). Assim
@@ -270,7 +356,9 @@ function alternarPausa() {
 }
 function alternarLanterna() {
   L.lanterna = !L.lanterna;
-  L.cam.applyVideoConstraints({ advanced: [{ torch: L.lanterna }] }).catch(function () {});
+  var c = { advanced: [{ torch: L.lanterna }] };
+  var pr = L.motor === "nativo" ? trilhaVideo().applyConstraints(c) : L.cam.applyVideoConstraints(c);
+  Promise.resolve(pr).catch(function () {});
   $("btn-lanterna").classList.toggle("ativo", L.lanterna);
 }
 
@@ -278,7 +366,7 @@ function alternarLanterna() {
 // Cada mensagem tem um id e é reenviada até a transferência responder
 // (a aba dela pode estar em segundo plano ou momentaneamente ocupada).
 function enviar(msg) {
-  msg.app = APP; msg.id = Date.now() + "-" + (++L.seq);
+  msg.app = APP; msg.id = Date.now() + "-" + (++L.seq); msg.criado = Date.now();
   L.pendentes[msg.id] = msg;
   if (msg.tipo === "bipe") addHistorico(msg.id, msg.cod, "…", "pend");
   postar(msg);
@@ -289,7 +377,17 @@ function postar(msg) {
 }
 setInterval(function () {
   if (!window.opener || window.opener.closed) { atualizarConexao(); return; }
-  Object.keys(L.pendentes).forEach(function (id) { postar(L.pendentes[id]); });
+  var agora = Date.now();
+  Object.keys(L.pendentes).forEach(function (id) {
+    var m = L.pendentes[id];
+    if (agora - m.criado > 60000) {
+      delete L.pendentes[id];
+      atualizarHistorico(id, "sem resposta", "erro");
+      mostrarResultado("erro", "A transferência não respondeu", "Volte na aba da transferência, confira se ela está aberta e bipe de novo.");
+      return;
+    }
+    postar(m);
+  });
   atualizarConexao();
 }, 2500);
 
@@ -315,6 +413,7 @@ function tratarResposta(orig, r) {
     bip(false); piscarJanela("erro");
     if (r.motivo === "sem_estoque") {
       L.pergunta = { cod: orig.cod, modo: orig.modo, id: orig.id };
+      pausarLeitura();
       mostrarResultado("aviso", "Não tem na loja " + (r.loja || ""), (r.desc || "SKU " + r.sku) + " · SKU " + r.sku + " está com estoque 0. É esse item mesmo?");
       $("r-pergunta").classList.remove("oculto");
       atualizarHistorico(orig.id, "est. 0?", "pend", r.desc || r.sku);
@@ -358,6 +457,7 @@ function mostrarResultado(tipo, titulo, sub, comAcao, qtd) {
 function responderSemEstoque(sim) {
   var pg = L.pergunta; if (!pg) return;
   L.pergunta = null;
+  retomarLeitura();
   $("r-pergunta").classList.add("oculto");
   L.ultimo.visto = Date.now(); // não reler na hora o mesmo produto
   if (sim) { removerHistorico(pg.id); enviar({ tipo: "confirmar", cod: pg.cod, modo: pg.modo }); }
@@ -373,6 +473,7 @@ function forcarDesconhecido() {
 // ---------- quantidade ----------
 function abrirQtd(r, idOrig) {
   L.qtdCtx = { sku: r.sku, ean: r.ean, desc: r.desc, idOrig: idOrig };
+  pausarLeitura();
   $("q-desc").textContent = r.desc || "Produto sem descrição";
   $("q-sub").textContent = (r.caixa ? "📦 Caixa " + r.caixa + " · " : "") + "SKU " + r.sku + (r.qtd ? " · já tem " + r.qtd + " nesta caixa" : "") + (r.estoque != null ? " · estoque na loja: " + r.estoque : "");
   $("q-input").value = 1;
@@ -388,6 +489,7 @@ function fecharQtd() {
   // Evita reler na hora o mesmo produto que acabou de ser gravado.
   L.ultimo.visto = Date.now();
   L.qtdCtx = null;
+  retomarLeitura();
 }
 function gravarQtd() {
   var c = L.qtdCtx; if (!c) return;
@@ -419,7 +521,8 @@ function renderHistorico() {
 function concluir() {
   var n = Object.keys(L.pendentes).length;
   if (n && !confirm(n + " leitura(s) ainda não confirmada(s) pela transferência. Sair mesmo assim?")) return;
-  try { if (L.cam && L.rodando) L.cam.stop(); } catch (e) {}
+  L.querCamera = false;
+  desligarCamera();
   try { if (window.opener) window.opener.focus(); } catch (e) {}
   window.close();
   // Se o navegador não deixar fechar a aba:
